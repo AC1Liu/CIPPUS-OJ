@@ -1,0 +1,284 @@
+<% this.title = '排名 - ' + contest.title %>
+<% include header %>
+<style>
+.ui.label.pointing.below.left::before { left: 12%; }
+.ui.label.pointing.below.right::before { left: 88%; }
+.ui.label.pointing.below.left { margin-bottom: 0; }
+.ui.label.pointing.below.right { margin-bottom: 0; float: right; }
+.submit_time {
+  font-size: 0.8em;
+  margin-top: 5px;
+  color: #000;
+}
+</style>
+<div class="padding">
+  <h1><%= contest.title %></h1>
+  <div style="margin-bottom: 30px;"><%- contest.subtitle %></div>
+  <% let unveiled = (isSupervisior || syzoj.utils.getCurrentDate() >= contest.start_time); %>
+  <% const seeResult = (isSupervisior || contest.ended); %>
+  <% const seeRanklist = seeResult || (contest.allowedSeeingResult() && (contest.allowedSeeingOthers() || contest.type === 'acm')); %>
+  <% let start = syzoj.utils.formatDate(contest.start_time), end = syzoj.utils.formatDate(contest.end_time); %>
+  <% if (contest.running && start.split(' ')[0] === end.split(' ')[0]) {
+    start = start.split(' ')[1]; end = end.split(' ')[1];
+  } %>
+  <div class="ui pointing below left label"><%= start %></div>
+  <div class="ui pointing below right label"><%= end %></div>
+  <% let timePercentage = Math.floor(Math.min(1, (syzoj.utils.getCurrentDate() - contest.start_time) / (contest.end_time - contest.start_time)) * 100); %>
+  <div id="timer-progress" class="ui tiny indicating progress<% if (timePercentage == 100) { %> success<% } %>" data-percent="<%= timePercentage %>">
+    <div class="bar" style="width: <%= timePercentage %>%;"></div>
+  </div>
+  <div class="row">
+    <div class="column">
+      <div class="ui buttons">
+        <a class="ui small orange button" href="<%= syzoj.utils.makeUrl(['contest', contest.id]) %>">题目</a>
+        <% if(seeRanklist) { %>
+          <a class="ui small blue button" href="<%= syzoj.utils.makeUrl(['contest', contest.id, 'ranklist']) %>">排行榜</a>
+        <% } %>
+        <% let submissionsUrl = seeResult ?
+          syzoj.utils.makeUrl(['submissions'], {contest: contest.id}) :
+          syzoj.utils.makeUrl(['contest', contest.id, 'submissions']); %>
+        <a class="ui small positive button" href="<%= submissionsUrl %>">提交记录</a>
+        <a class="ui small teal button" href="<%= syzoj.utils.makeUrl(['contest', contest.id, 'file']) %>">下发文件</a>
+        <% if (isSupervisior) { %>
+          <a class="ui small black button" href="<%= syzoj.utils.makeUrl(['contest', contest.id, 'ranklist/download']) %>">下载成绩</a>
+          <a class="ui small button" href="<%= syzoj.utils.makeUrl(['contest', contest.id, 'edit']) %>">编辑比赛</a>
+        <% } %>
+      </div>
+    </div>
+  </div>
+<% if (isRankMasking) { %>
+  <div class="row" style="margin-top: 2em;">
+    <div class="column">
+      <div class="ui error message">
+        当前比赛已于 <strong><%- syzoj.utils.formatDate(contest.rank_stop_time || syzoj.utils.getCurrentDate()) %></strong> 封榜，封榜之后排行榜将不再更新。
+      </div>
+    </div>
+  </div>
+<% } %>
+        <table class="ui very basic center aligned table">
+            <thead>
+            <tr>
+                <th>#</th>
+                <th>用户名</th>
+                <% if (isSupervisior) { %>
+                <th>真实姓名</th>
+                <th>学号</th>
+                <% } %>
+                <% if (contest.type === 'acm') { %>
+                  <th>通过数量</th>
+                  <th>罚时</th>
+                <% } %>
+                <% for (let i = 0; i < problems.length; i++) { %>
+                <th>
+                  <a href="<%= syzoj.utils.makeUrl(['contest', contest.id, 'problem', i + 1]) %>">
+                    <!-- <%= syzoj.utils.removeTitleTag(problems[i].title) %> -->
+                    <%= String.fromCharCode(i + 65) %>
+                  </a>
+                </th>
+                <% } %>
+                <% if (contest.type === 'noi' || contest.type === 'ioi') { %>
+                  <th>总分</th>
+                <% } %>
+            </tr>
+            </thead>
+            <tbody>
+            <%
+            for (let problem of problems) {
+              let i = 0, min, minPos = -1;
+              for (let item of ranklist) {
+                i++;
+                let condition;
+                if (contest.type === 'acm') 
+                {
+                  if(isRankMasking) condition = item.player.score_details[problem.id] && item.player.score_details[problem.id].maskedaccepted && (minPos === -1 || item.player.score_details[problem.id].maskedacceptedTime < min.player.score_details[problem.id].maskedacceptedTime);
+                  else condition = item.player.score_details[problem.id] && item.player.score_details[problem.id].accepted && (minPos === -1 || item.player.score_details[problem.id].acceptedTime < min.player.score_details[problem.id].acceptedTime);
+                }
+                else condition = item.player.score_details[problem.id] && item.player.score_details[problem.id].score === 100 && (minPos === -1 || item.player.score_details[problem.id].judge_state.submit_time < min.player.score_details[problem.id].judge_state.submit_time);
+                if (condition) {
+                  min = item;
+                  minPos = i;
+                }
+              }
+              problem.min = minPos;
+            }
+
+            let i = 0, rank = 0, lastItem;
+            for (let item of ranklist) {
+              i++;
+              let latest = contest.start_time, timeSum = 0, unacceptedCount = 0;
+            %>
+            <tr>
+                <%
+                  if (contest.type === 'noi' || contest.type === 'ioi') {
+                    if (i === 1 || item.player.score !== lastItem.player.score) rank = i;
+                  } else if (contest.type === 'acm') {
+                    for (let problem of problems) {
+                      if(isRankMasking) {
+                        if (item.player.score_details[problem.id] && item.player.score_details[problem.id].maskedaccepted) {
+                          timeSum += (item.player.score_details[problem.id].maskedacceptedTime - contest.start_time) + (item.player.score_details[problem.id].maskedunacceptedCount * 20 * 60);
+                          unacceptedCount += item.player.score_details[problem.id].maskedunacceptedCount;
+                        }
+                      }
+                      else {
+                        if (item.player.score_details[problem.id] && item.player.score_details[problem.id].accepted) {
+                          timeSum += (item.player.score_details[problem.id].acceptedTime - contest.start_time) + (item.player.score_details[problem.id].unacceptedCount * 20 * 60);
+                          unacceptedCount += item.player.score_details[problem.id].unacceptedCount;
+                        }
+                      }
+                    }
+                    if(isRankMasking) item.player.maskedtimeSum = timeSum;
+                    else item.player.timeSum = timeSum;
+                    if(isRankMasking) {
+                      if (i === 1 || item.player.maskedscore !== lastItem.player.maskedscore || item.player.maskedtimeSum !== lastItem.player.maskedtimeSum) rank = i;
+                    }
+                    else {
+                      if (i === 1 || item.player.score !== lastItem.player.score || item.player.timeSum !== lastItem.player.timeSum) rank = i;
+                    }
+                  }
+                %>
+                <td>
+                  <% if (rank == 1) { %>
+                    <div class="ui yellow ribbon label">
+                  <% } else if (rank == 2) { %>
+                    <div class="ui ribbon label">
+                  <% } else if (rank == 3) { %>
+                    <div class="ui brown ribbon label" style="background-color: #C47222 !important;">
+                  <% } else { %>
+                    <div>
+                  <% } %>
+                  <%= rank %>
+                  </div>
+                </td>
+                <td><a href="<%= syzoj.utils.makeUrl(['user', item.user.id]) %>"><%= item.user.username %></a><% if (item.user.nameplate) { %><%- item.user.nameplate %><% } %></td>
+                <% if (isSupervisior) { %>
+                <td><%= item.user.realname %></td>
+                <td><%= item.user.idnumber %></td>
+                <% } %>
+                <% if (contest.type === 'acm') { %>
+                  <td>
+                  <% if (isRankMasking) { %>
+                    <span class="score score_<%= parseInt((item.player.maskedscore / ranklist[0].player.maskedscore * 10) || 0) %>">
+                      <%= item.player.maskedscore %>
+                    </span>
+                  <% } else { %>
+                    <span class="score score_<%= parseInt((item.player.score / ranklist[0].player.score * 10) || 0) %>">
+                      <%= item.player.score %>
+                    </span>
+                  <% } %>
+                  </td>
+                  <td>
+                    <%= syzoj.utils.formatTime(timeSum) %>
+                  </td>
+                <% } %>
+                <% for (let problem of problems) { %>
+                  <% if (problem.min === i) { %>
+                    <td style="background: rgb(244, 255, 245); ">
+                  <% } else { %>
+                    <td>
+                  <% } %>
+                  <% if (!item.player.score_details[problem.id]) { %>
+                    </td>
+                  <% } else if (contest.type === 'acm') { %>
+                  <% if (isRankMasking) { %>
+                    <% if (isSupervisior || contest.isEnded()) { %>
+                      <a href="<%= syzoj.utils.makeUrl(['submission', item.player.score_details[problem.id].maskedjudge_id]) %>">
+                    <% } else if (item.user.id === user.id) { %>
+                      <a href="<%= syzoj.utils.makeUrl(['contest/submission', item.player.score_details[problem.id].maskedjudge_id]) %>">
+                    <% } %>
+                        <% if (item.player.score_details[problem.id].maskedaccepted) { %>
+                          <span class="score score_10">
+                            <% if (item.player.score_details[problem.id].maskedunacceptedCount) { %>
+                              +<%= item.player.score_details[problem.id].maskedunacceptedCount %>
+                            <% } else { %>
+                              +
+                            <% } %>
+                          </span>
+
+                          <div class="submit_time">
+                            <%= syzoj.utils.formatTime(item.player.score_details[problem.id].maskedacceptedTime - contest.start_time) %>
+                          </div>
+                        <% } else if (item.player.score_details[problem.id].maskedunacceptedCount) { %>
+                          <span class="score score_0">
+                            -<%= item.player.score_details[problem.id].maskedunacceptedCount %>
+                          </span>
+                        <% } %>
+                    <% if (isSupervisior || contest.isEnded() || item.user.id === user.id) { %>
+                      </a>
+                    <% } %>
+                    <% if ((!item.player.score_details[problem.id].maskedaccepted)&&item.player.score_details[problem.id].maskedCount) { %>
+                      <strong>(<%= item.player.score_details[problem.id].maskedCount %>)</strong>
+                    <% } %>
+                    </td>
+                    <% } else { %>
+                      <% if (isSupervisior || contest.isEnded()) { %>
+                        <a href="<%= syzoj.utils.makeUrl(['submission', item.player.score_details[problem.id].judge_id]) %>">
+                      <% } else if (item.user.id === user.id) { %>
+                        <a href="<%= syzoj.utils.makeUrl(['contest/submission', item.player.score_details[problem.id].judge_id]) %>">
+                      <% } %>
+                          <% if (item.player.score_details[problem.id].accepted) { %>
+                            <span class="score score_10">
+                              <% if (item.player.score_details[problem.id].unacceptedCount) { %>
+                                +<%= item.player.score_details[problem.id].unacceptedCount %>
+                              <% } else { %>
+                                +
+                              <% } %>
+                            </span>
+  
+                            <div class="submit_time">
+                              <%= syzoj.utils.formatTime(item.player.score_details[problem.id].acceptedTime - contest.start_time) %>
+                            </div>
+                          <% } else if (item.player.score_details[problem.id].unacceptedCount) { %>
+                            <span class="score score_0">
+                              -<%= item.player.score_details[problem.id].unacceptedCount %>
+                            </span>
+                          <% } %>
+                      <% if (isSupervisior || contest.isEnded() || item.user.id === user.id) { %>
+                        </a>
+                      <% } %>
+                      </td>
+                    <% } %>
+                  <% } else if (contest.type === 'noi' || contest.type === 'ioi') { %>
+                      <a href="<%= syzoj.utils.makeUrl(['submission', item.player.score_details[problem.id].judge_id]) %>">
+                        <% if (item.player.score_details[problem.id].weighted_score != null) { %>
+                          <span class="score score_<%= parseInt((item.player.score_details[problem.id].score / 10) || 0) %>">
+                            <%= Math.round(item.player.score_details[problem.id].weighted_score) %>
+                          </span>
+                        <% } else { %>
+                          <span class="status compile_error">
+                            0
+                          </span>
+                        <% } %>
+                      </a>
+                      <div class="submit_time">
+                        <%= syzoj.utils.formatTime(item.player.score_details[problem.id].judge_state.submit_time - contest.start_time) %>
+                        <% latest = Math.max(latest, item.player.score_details[problem.id].judge_state.submit_time)  %>
+                      </div>
+                    </td>
+                  <% } %>
+                <% } %>
+                <% if (contest.type === 'noi' || contest.type === 'ioi') { %>
+                  <td>
+                    <span class="score score_<%= parseInt((item.player.score / ranklist[0].player.score * 10) || 0) %>">
+                      <%= item.player.score %>
+                    </span>
+                    <div class="submit_time">
+                      <%= syzoj.utils.formatTime(latest - contest.start_time) %>
+                    </div>
+                  </td>
+                <% } %>
+            </tr>
+            <% lastItem = item; %>
+            <% } %>
+            </tbody>
+        </table>
+<% if (!ranklist.length) { %>
+<div style="background-color: #fff; height: 18px; margin-top: -18px; "></div>
+<div class="ui placeholder segment" style="margin-top: 0px; ">
+  <div class="ui icon header">
+    <i class="ui file icon" style="margin-bottom: 20px; "></i>
+    暂无选手提交
+  </div>
+</div>
+<% } %>
+</div>
+<% include footer %>

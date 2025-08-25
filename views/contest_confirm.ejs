@@ -1,0 +1,82 @@
+<% this.title = '比赛密码确认';  %>
+<% include header %>
+<div class="ui error message" id="error" hidden></div>
+<div class="ui middle aligned center aligned grid">
+  <div class="row">
+    <div class="column" style="max-width: 450px">
+      <h2 class="ui image header">
+        <div class="content" style="margin-bottom: 10px; ">
+          比赛密码确认
+        </div>
+      </h2>
+      <form class="ui large form" id="resetForm" onsubmit="return false">
+        <div class="ui existing segment">
+            <div class="field">
+                <div class="ui left icon input">
+                    <i class="lock icon"></i>
+                    <input name="password" type="password" placeholder="密码" id="password" onkeydown="key_login(event)">
+                </div>
+            </div>
+            <div class="ui fluid large submit button" id="go">进入比赛</div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script type="text/javascript">
+function key_login(event) {
+    if (event.keyCode == 13) {
+        submitForm();
+    }
+}
+function show_error(error) {
+    $("#error").text(error);
+    $("#error").show();
+}
+function success() {
+    window.location.href = "<%=back%>";
+}
+function submitForm() {
+    if($("#password").val()==='') { show_error("请输入密码！"); return; }
+    $("#go").addClass("loading");
+    $.ajax({
+        url: "/contest/<%=id%>/access",
+        type: 'POST',
+        data: {
+            "password": $("#password").val()
+        },
+        async: true,
+        success: function(data) {
+            error_code = data.error_code;
+            switch (error_code) {
+                case 3001:
+                    show_error("密码错误！");
+                    break;
+                case 3002:
+                    show_error("尝试输入错误密码次数过多，请5分钟后再试。");
+                    break;
+                case 1:
+                    success();
+                    return;
+                default:
+                    show_error("未知错误");
+                    break;
+            }
+            $("#go").text("进入比赛");
+            $("#go").removeClass("loading");
+        },
+        error:  function(XMLHttpRequest, textStatus, errorThrown) {
+            alert(XMLHttpRequest.responseText);
+            show_error("未知错误");
+            $("#go").text("进入比赛");
+            $("#go").removeClass("loading");
+        }
+    });
+}
+$(document).ready(function() {
+    $("#go").click(function() {
+        submitForm();
+    });
+});
+</script>
+<% include footer %>
