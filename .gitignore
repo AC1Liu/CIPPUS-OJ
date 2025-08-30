@@ -44,6 +44,7 @@ jspm_packages
 .node_repl_history
 
 # Upload directory
+/uploads/
 
 
 # Created by https://www.gitignore.io/api/vim
